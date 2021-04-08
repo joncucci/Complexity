@@ -99,34 +99,87 @@ function traverseWithParents(object, visitor)
     }
 }
 
-function complexity(filePath)
-{
+function decisionCounter(node) {
+	var max = 0;
+	ifStatement = false;
+
+	traverseWithParents(node, function (node) {
+		if (node.type === "IfStatement")
+			ifStatement = true;
+
+		if (node.type === "LogicalExpression" && (node.operator === "&&" || node.operator === "||"))
+			max++;
+	});
+
+	if (max === 0 && ifStatement) 
+	{
+		return 1
+	}
+	return max;
+}
+// function complexity(filePath)
+// {
+// 	var buf = fs.readFileSync(filePath, "utf8");
+// 	var ast = esprima.parse(buf, options);
+// 	var i = 0;
+
+// 	var fileBuilder = new FileBuilder();
+// 	fileBuilder.FileName = filePath;
+// 	fileBuilder.ImportCount = 0;
+// 	builders[filePath] = fileBuilder;
+
+// 	traverseWithParents(ast, function (node) 
+// 	{
+// 		if (node.type === 'FunctionDeclaration') 
+// 		{
+// 			var builder = new FunctionBuilder();
+
+// 			builder.FunctionName = functionName(node);
+// 			builder.StartLine    = node.loc.start.line;
+
+// 			builders[builder.FunctionName] = builder;
+// 		}
+
+// 	});
+
+// }
+
+
+function complexity(filePath) {
 	var buf = fs.readFileSync(filePath, "utf8");
 	var ast = esprima.parse(buf, options);
+	var stringCount = (JSON.stringify(ast).match(/Literal/g) || []).length;
 
-	var i = 0;
-
-	// A file level-builder:
 	var fileBuilder = new FileBuilder();
 	fileBuilder.FileName = filePath;
 	fileBuilder.ImportCount = 0;
 	builders[filePath] = fileBuilder;
+	fileBuilder.Strings = stringCount;
 
-	// Tranverse program with a function visitor.
-	traverseWithParents(ast, function (node) 
-	{
-		if (node.type === 'FunctionDeclaration') 
-		{
+	// Traverse programs with a visitor
+	traverseWithParents(ast, function (node) {
+		if (node.type === 'FunctionDeclaration') {
 			var builder = new FunctionBuilder();
+			builder.ParameterCount = node.params.length;
+			var max = 0;
 
+			traverseWithParents(node, function (node) {
+				if (isDecision(node)) 
+				{
+					builder.SimpleCyclomaticComplexity++;
+
+					if (decisionCounter(node) > max) {
+						max = decisionCounter(node);
+					}
+				}
+			});
+			builder.SimpleCyclomaticComplexity++;
 			builder.FunctionName = functionName(node);
-			builder.StartLine    = node.loc.start.line;
-
+			builder.StartLine = node.loc.start.line;
+			builder.MaxConditions = max;
 			builders[builder.FunctionName] = builder;
 		}
-
 	});
-
 }
 
 // Helper function for counting children of node.
