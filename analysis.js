@@ -20,10 +20,24 @@ function main()
 		var builder = builders[node];
 		builder.report();
 	}
-
 }
 
+function counter(node){
+	ifStatement = false;
+	var num = 0;
 
+	traverseWithParents(node, function (node){
+		if (node.type === "IfStatement") ifStatement = true;
+		if (node.type === "LogicalExpression" && (node.operator === "&&" || node.operator === "||"))
+			num++;
+	});
+
+	if (num === 0 && ifStatement){
+		return 1
+	}
+
+	return num;
+}
 
 var builders = {};
 
@@ -37,9 +51,9 @@ function FunctionBuilder()
 	// Number of if statements/loops + 1
 	this.SimpleCyclomaticComplexity = 0;
 	// The max depth of scopes (nested ifs, loops, etc)
-	this.MaxNestingDepth    = 0;
+	this.MaxNestingDepth = 0;
 	// The max number of conditions if one decision statement.
-	this.MaxConditions      = 0;
+	this.MaxConditions = 0;
 
 	this.report = function()
 	{
@@ -52,9 +66,12 @@ function FunctionBuilder()
 				"MaxConditions: {4}\t" +
 				"Parameters: {5}\n\n"
 			)
-			.format(this.FunctionName, this.StartLine,
-				     this.SimpleCyclomaticComplexity, this.MaxNestingDepth,
-			        this.MaxConditions, this.ParameterCount)
+			.format(this.FunctionName, 
+			this.StartLine,
+			this.SimpleCyclomaticComplexity, 
+			this.MaxNestingDepth,
+			this.MaxConditions, 
+			this.ParameterCount)
 		);
 	}
 };
@@ -99,87 +116,51 @@ function traverseWithParents(object, visitor)
     }
 }
 
-function decisionCounter(node) {
-	var max = 0;
-	ifStatement = false;
-
-	traverseWithParents(node, function (node) {
-		if (node.type === "IfStatement")
-			ifStatement = true;
-
-		if (node.type === "LogicalExpression" && (node.operator === "&&" || node.operator === "||"))
-			max++;
-	});
-
-	if (max === 0 && ifStatement) 
-	{
-		return 1
-	}
-	return max;
-}
-// function complexity(filePath)
-// {
-// 	var buf = fs.readFileSync(filePath, "utf8");
-// 	var ast = esprima.parse(buf, options);
-// 	var i = 0;
-
-// 	var fileBuilder = new FileBuilder();
-// 	fileBuilder.FileName = filePath;
-// 	fileBuilder.ImportCount = 0;
-// 	builders[filePath] = fileBuilder;
-
-// 	traverseWithParents(ast, function (node) 
-// 	{
-// 		if (node.type === 'FunctionDeclaration') 
-// 		{
-// 			var builder = new FunctionBuilder();
-
-// 			builder.FunctionName = functionName(node);
-// 			builder.StartLine    = node.loc.start.line;
-
-// 			builders[builder.FunctionName] = builder;
-// 		}
-
-// 	});
-
-// }
-
-
-function complexity(filePath) {
+function complexity(filePath)
+{
 	var buf = fs.readFileSync(filePath, "utf8");
 	var ast = esprima.parse(buf, options);
-	var stringCount = (JSON.stringify(ast).match(/Literal/g) || []).length;
 
+	var i = 0;
+
+	var strCount = (JSON.stringify(ast).match(/Literal/g) || []).length;
+
+	// A file level-builder:
 	var fileBuilder = new FileBuilder();
 	fileBuilder.FileName = filePath;
 	fileBuilder.ImportCount = 0;
 	builders[filePath] = fileBuilder;
-	fileBuilder.Strings = stringCount;
 
-	// Traverse programs with a visitor
-	traverseWithParents(ast, function (node) {
+	fileBuilder.Strings = strCount;
+	exports.getStrings = () => fileBuilder.Strings;
+
+	// Tranverse program with a function visitor.
+	traverseWithParents(ast, function (node) 
+	{
 		if (node.type === 'FunctionDeclaration') {
+			var num = 0;
 			var builder = new FunctionBuilder();
-			builder.ParameterCount = node.params.length;
-			var max = 0;
-
+			builder.ParameterCount = node.params.length
+			
 			traverseWithParents(node, function (node) {
-				if (isDecision(node)) 
-				{
-					builder.SimpleCyclomaticComplexity++;
+				if (isDecision(node)) {
+					builder.SimpleCyclomaticComplexity += 1;
 
-					if (decisionCounter(node) > max) {
-						max = decisionCounter(node);
+					if (counter(node) > num) {
+						num = counter(node);
 					}
 				}
 			});
-			builder.SimpleCyclomaticComplexity++;
+
 			builder.FunctionName = functionName(node);
-			builder.StartLine = node.loc.start.line;
-			builder.MaxConditions = max;
+			builder.StartLine    = node.loc.start.line;
 			builders[builder.FunctionName] = builder;
+			builder.SimpleCyclomaticComplexity += 1
+			builder.MaxConditions = num;
 		}
+
 	});
+
 }
 
 // Helper function for counting children of node.
@@ -255,8 +236,7 @@ function Crazy (argument)
       else if ( secs > 59 && secs < 3600 )
       {
           var mints = secs / 60;
-          var remainder = parseInt(secs.toString().split(".")[0]) -
-(parseInt(mints.toString().split(".")[0]) * 60);
+          var remainder = parseInt(secs.toString().split(".")[0]) - (parseInt(mints.toString().split(".")[0]) * 60);
           var szmin;
           if ( mints > 1 )
           {
@@ -328,4 +308,5 @@ remainder.toString() + " seconds";
 mints.toString().split(".")[0] + " " + szmin;
       }
   }
- exports.complexity = complexity;
+
+exports.complexity = complexity;
